@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:movies_repository/MovieBrief.dart';
 import 'package:movies_repository/MovieScreen.dart';
 import 'package:movies_repository/NetworkClient.dart';
+import "package:pull_to_refresh/pull_to_refresh.dart";
 
 void main() => runApp(MyApp());
 
@@ -51,13 +52,7 @@ class _MyHomePageState extends State<MyHomePage> {
   List<MovieBrief> movies = new List<MovieBrief>();
   int page = 1;
 
-  void _incrementCounter() {
-    // This call to setState tells the Flutter framework that something has
-    // changed in this State, which causes it to rerun the build method below
-    // so that the display can reflect the updated values. If we changed
-    // _counter without calling setState(), then the build method would not be
-    // called again, and so nothing would appear to happen.
-
+  void _loadTopRatedMoviesPage() {
     new NetworkClient().getTopRatedMovies(page, (topRatedMoviesListResult) {
       setState(() {
         page = page + 1;
@@ -66,6 +61,24 @@ class _MyHomePageState extends State<MyHomePage> {
     }, (error) {
       print("error = $error");
     });
+  }
+
+  void _incrementCounter() {
+    print("_incrementCounter method called");
+  }
+
+  Future _onRefresh() async {
+    return Future.sync(() => _loadTopRatedMoviesPage());
+  }
+
+  _onOffsetCallback(bool up, double offset) {
+    print("up = $up, offset = $offset");
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTopRatedMoviesPage();
   }
 
   @override
@@ -82,45 +95,47 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: new ListView.builder(
-          itemCount: movies.length,
-          itemBuilder: (context, pos) {
-            MovieBrief movie = movies[pos];
+      body: new RefreshIndicator(
+          onRefresh: _onRefresh,
+          child: new ListView.builder(
+              itemCount: movies.length,
+              itemBuilder: (context, pos) {
+                MovieBrief movie = movies[pos];
 
-            return new Card(
-                key: Key("$pos"),
-                color: Colors.black38,
-                child: GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => MovieScreen(movie)),
-                      );
-                    },
-                    child: Container(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Text(
-                                movie.title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
+                return new Card(
+                    key: Key("$pos"),
+                    color: Colors.black38,
+                    child: GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => MovieScreen(movie)),
+                          );
+                        },
+                        child: Container(
+                            padding: const EdgeInsets.all(32.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: Text(
+                                    movie.title,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            Text(
-                              movie.overview,
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ))));
-          }),
+                                Text(
+                                  movie.overview,
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ))));
+              })),
       floatingActionButton: FloatingActionButton(
         onPressed: _incrementCounter,
         tooltip: 'Increment',

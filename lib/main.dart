@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:movies_repository/MovieBrief.dart';
 import 'package:movies_repository/MovieScreen.dart';
 import 'package:movies_repository/NetworkClient.dart';
-import "package:pull_to_refresh/pull_to_refresh.dart";
 
 void main() => runApp(MyApp());
 
@@ -49,12 +48,18 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<MovieBrief> movies = new List<MovieBrief>();
+  List<Object> movies = new List<Object>();
   int page = 1;
+  bool isLoading;
+  bool canLoadMore;
 
   void _loadTopRatedMoviesPage() {
     new NetworkClient().getTopRatedMovies(page, (topRatedMoviesListResult) {
       setState(() {
+        if (movies.length != 0) {
+          movies.removeLast();
+        }
+        isLoading = false;
         page = page + 1;
         movies.addAll(topRatedMoviesListResult.results);
       });
@@ -67,14 +72,6 @@ class _MyHomePageState extends State<MyHomePage> {
     print("_incrementCounter method called");
   }
 
-  Future _onRefresh() async {
-    return Future.sync(() => _loadTopRatedMoviesPage());
-  }
-
-  _onOffsetCallback(bool up, double offset) {
-    print("up = $up, offset = $offset");
-  }
-
   @override
   void initState() {
     super.initState();
@@ -83,59 +80,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    var listView = createListView();
+
     return Scaffold(
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: new RefreshIndicator(
-          onRefresh: _onRefresh,
-          child: new ListView.builder(
-              itemCount: movies.length,
-              itemBuilder: (context, pos) {
-                MovieBrief movie = movies[pos];
-
-                return new Card(
-                    key: Key("$pos"),
-                    color: Colors.black38,
-                    child: GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => MovieScreen(movie)),
-                          );
-                        },
-                        child: Container(
-                            padding: const EdgeInsets.all(32.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.only(bottom: 8.0),
-                                  child: Text(
-                                    movie.title,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  movie.overview,
-                                  style: TextStyle(
-                                    color: Colors.grey[500],
-                                  ),
-                                ),
-                              ],
-                            ))));
-              })),
+      body: listView,
       floatingActionButton: FloatingActionButton(
         onPressed: _incrementCounter,
         tooltip: 'Increment',
@@ -143,4 +96,90 @@ class _MyHomePageState extends State<MyHomePage> {
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
+
+  NotificationListener createListView() {
+    var childrenDelegate = new MySliverChildBuilderDelegate((context, pos) {
+      Object obj = movies[pos];
+      if (obj is MovieBrief) {
+        MovieBrief movie = obj;
+
+        return new Card(
+            key: Key("$pos"),
+            color: Colors.black38,
+            child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => MovieScreen(movie)),
+                  );
+                },
+                child: Container(
+                    padding: const EdgeInsets.all(32.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                            movie.title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          movie.overview,
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ))));
+      } else if (obj is Loading) {
+        return Container(
+          child: CircularProgressIndicator(value: null),
+          width: 100,
+          height: 100,
+          padding: EdgeInsets.all(20),
+        );
+      } else {
+        Text("WHAT IS THIS?!");
+      }
+    }, childCount: movies.length);
+
+    var listView = new ListView.custom(childrenDelegate: childrenDelegate);
+
+    bool scrollNotification(ScrollUpdateNotification notification) {
+      print("notification = $notification");
+      if (!isLoading &&
+          notification.scrollDelta > 0 &&
+          childrenDelegate.canLoadMore) {
+        setState(() {
+          isLoading = true;
+          movies.add(Loading());
+        });
+        _loadTopRatedMoviesPage();
+        return true;
+      }
+      return false;
+    }
+
+    return new NotificationListener<ScrollUpdateNotification>(
+        child: listView, onNotification: scrollNotification);
+  }
 }
+
+class MySliverChildBuilderDelegate extends SliverChildBuilderDelegate {
+  MySliverChildBuilderDelegate(IndexedWidgetBuilder builder, {int childCount})
+      : super(builder, childCount: childCount);
+
+  bool canLoadMore;
+
+  @override
+  void didFinishLayout(int firstIndex, int lastIndex) {
+    canLoadMore = lastIndex >= childCount - 1;
+    print("lastIndex = $lastIndex");
+  }
+}
+
+class Loading {}
